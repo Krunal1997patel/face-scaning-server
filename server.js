@@ -1,8 +1,13 @@
-const express = require('express');
+const express =   require('express');
 const bodyPaser = require('body-parser');
-const bcrypt = require('bcrypt-nodejs');
-const cors = require('cors');
-const knex = require('knex');
+const bcrypt =    require('bcrypt-nodejs');
+const cors =      require('cors');
+const knex =      require('knex');
+
+const register = require('./controllers/register');
+const signin =   require('./controllers/signin');
+const profile =  require('./controllers/profile');
+const image =    require('./controllers/image');
 
 const db = knex({
     client: 'pg',
@@ -21,85 +26,18 @@ app.use(cors())
 
 app.use(bodyPaser.json());
 
-app.get('/', (req, res) => {
-    res.send(database.users);
-})
+app.get('/', (req, res) => {res.send('it is working')})
 
-app.post('/signin', (req, res) => {
-    db.select('email', 'hash').from('login')
-      .where('email', '=', req.body.email)
-      .then(data => {
-          const isValid = bcrypt.compareSync(req.body.password, data[0].hash);
-          if(isValid){
-            return  db.select('*').from('users')
-              .where('email', '=', req.body.email)
-              .then(user => {
-                  res.json(user[0])
-              })
-              .catch(err => res.status(400).json('unable to ge user'))
-          }else{
-            res.status(400).json('Wrong email or password');
-          }
-      })
-      .catch(err => res.status(400).json('Wrong email or password'))
-})
+app.post('/signin', (req, res) => {signin.handleSignin(req, res, db, bcrypt)})
 
-app.post('/register', (req, res) => {
-    const {email, name, password } = req.body;
-    const hash = bcrypt.hashSync(password);
-    db.transaction(trx => {
-        return trx
-        .insert({
-            hash: hash,
-            email: email
-        })
-        .into('login')
-        .returning('email')
-        .then(loginEmail => {
-            return trx('users')
-                .returning('*')
-                .insert({
-                    email: loginEmail[0],
-                    name: name,
-                    joined: new Date()
-                })
-                .then(user => {
-                    res.json(user[0])
-                })
-        })
-        .then(trx.commit)
-        .catch(trx.rollback)
-    })
-    .catch(err => res.status(400).json('unable to join'))
-});
+app.post('/register', (req, res) => {register.handleRegister(req, res, db, bcrypt)});
 
-app.get('/profile/:id', (req, res) => {
-    const { id } = req.params;
+app.get('/profile/:id', (req, res) => {profile.handleProfile(req, res, db)});
 
-    db.select('*').from('users').where({id})
-      .then(user => {
-          if(user.length){
-            res.json(user[0])
-            }else{
-                res.status(400).json('user not found');
-            }
-        })
-    .catch(err => res.status(400).json('user not found'))
-});
+app.put('/image', (req, res) => {image.handleImage(req, res, db)})
 
-app.put('/image', (req, res) => {
-    const { id } = req.body;
-    db('users').where('id', '=', id)
-    .increment('imageInput', 1)
-    .returning('imageInput')
-    .then(imageInput => {
-        res.json(imageInput[0]);
-    })
-    .catch(err => res.status(400).json('unable to get count'))
-})
-
-app.listen(3001, () => {
-    console.log('working great');
+app.listen(process.env.PORT || 3001, () => {
+    console.log(`working great on ${process.env.PORT}`);
 });
 
 /*
